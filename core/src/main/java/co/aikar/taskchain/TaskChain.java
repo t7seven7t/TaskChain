@@ -46,6 +46,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 
@@ -844,6 +845,27 @@ public class TaskChain <T> {
         return add0(new TaskHolder<>(this, null, task));
     }
 
+    @SuppressWarnings("WeakerAccess")
+    public <R> TaskChain<R> syncUntil(Task<R, R> task, Function<R, Boolean> repeatIf, int delay, TimeUnit units) {
+        return until(task, repeatIf, delay, units, false);
+    }
+
+    @SuppressWarnings("WeakerAccess")
+    public <R> TaskChain<R> asyncUntil(Task<R, R> task, Function<R, Boolean> repeatIf, int delay, TimeUnit units) {
+        return until(task, repeatIf, delay, units, true);
+    }
+
+    @SuppressWarnings("WeakerAccess")
+    public <R> TaskChain<R> currentUntil(Task<R, R> task, Function<R, Boolean> repeatIf, int delay, TimeUnit units) {
+        return until(task, repeatIf, delay, units, null);
+    }
+
+    @SuppressWarnings("WeakerAccess")
+    private <R> TaskChain<R> until(Task<R, R> task, Function<R, Boolean> repeatIf, int delay, TimeUnit units, Boolean async) {
+        //noinspection unchecked
+        return add0(new TaskHolder<>(this, async, task, repeatIf, delay <= 0 ? null : (input, next) -> impl.scheduleTask(delay, units, () -> next.accept(input))));
+    }
+
     /**
      * Execute task on main thread, with the last returned input, returning an output
      * @param task The task to execute
@@ -1157,6 +1179,8 @@ public class TaskChain <T> {
     private class TaskHolder<R, A> {
         private final TaskChain<?> chain;
         private final Task<R, A> task;
+        private final Function<R, Boolean> repeatIf;
+        private final AsyncExecutingTask<R, R> delayTask;
         final Boolean async;
 
         private boolean executed = false;
@@ -1164,10 +1188,16 @@ public class TaskChain <T> {
         private final int actionIndex;
 
         private TaskHolder(TaskChain<?> chain, Boolean async, Task<R, A> task) {
+            this(chain, async, task, a -> false, null);
+        }
+
+        private TaskHolder(TaskChain<?> chain, Boolean async, Task<R, A> task, Function<R, Boolean> repeatIf, AsyncExecutingTask<R, R> delayTask) {
             this.actionIndex = TaskChain.this.actionIndex++;
-            this.task = task;
             this.chain = chain;
+            this.task = task;
+            this.repeatIf = repeatIf;
             this.async = async;
+            this.delayTask = delayTask;
         }
 
         /**
@@ -1230,7 +1260,14 @@ public class TaskChain <T> {
         /**
          * Accepts result of previous task and executes the next
          */
-        private void next(Object resp) {
+        private void next(R resp) {
+            if (repeatIf.apply(resp)) {
+                this.chain.previous = resp;
+                if (delayTask != null) delayTask.runAsync(resp, r -> this.run());
+                else this.run();
+                return;
+            }
+
             synchronized (this) {
                 if (this.aborted) {
                     this.chain.done(false);
