@@ -846,24 +846,24 @@ public class TaskChain <T> {
     }
 
     @SuppressWarnings("WeakerAccess")
-    public <R> TaskChain<R> syncUntil(Task<R, R> task, Function<R, Boolean> repeatIf, int delay, TimeUnit units) {
-        return until(task, repeatIf, delay, units, false);
+    public <R> TaskChain<R> syncUntil(Task<R, R> task, Function<R, Boolean> untilIf, int delay, TimeUnit units) {
+        return until(task, untilIf, delay, units, false);
     }
 
     @SuppressWarnings("WeakerAccess")
-    public <R> TaskChain<R> asyncUntil(Task<R, R> task, Function<R, Boolean> repeatIf, int delay, TimeUnit units) {
-        return until(task, repeatIf, delay, units, true);
+    public <R> TaskChain<R> asyncUntil(Task<R, R> task, Function<R, Boolean> untilIf, int delay, TimeUnit units) {
+        return until(task, untilIf, delay, units, true);
     }
 
     @SuppressWarnings("WeakerAccess")
-    public <R> TaskChain<R> currentUntil(Task<R, R> task, Function<R, Boolean> repeatIf, int delay, TimeUnit units) {
-        return until(task, repeatIf, delay, units, null);
+    public <R> TaskChain<R> currentUntil(Task<R, R> task, Function<R, Boolean> untilIf, int delay, TimeUnit units) {
+        return until(task, untilIf, delay, units, null);
     }
 
     @SuppressWarnings("WeakerAccess")
-    private <R> TaskChain<R> until(Task<R, R> task, Function<R, Boolean> repeatIf, int delay, TimeUnit units, Boolean async) {
+    private <R> TaskChain<R> until(Task<R, R> task, Function<R, Boolean> untilIf, int delay, TimeUnit units, Boolean async) {
         //noinspection unchecked
-        return add0(new TaskHolder<>(this, async, task, repeatIf, delay <= 0 ? null : (input, next) -> impl.scheduleTask(delay, units, () -> next.accept(input))));
+        return add0(new TaskHolder<>(this, async, task, untilIf, delay <= 0 ? null : (input, next) -> impl.scheduleTask(delay, units, () -> next.accept(input))));
     }
 
     /**
@@ -1179,7 +1179,7 @@ public class TaskChain <T> {
     private class TaskHolder<R, A> {
         private final TaskChain<?> chain;
         private final Task<R, A> task;
-        private final Function<R, Boolean> repeatIf;
+        private final Function<R, Boolean> untilIf;
         private final AsyncExecutingTask<R, R> delayTask;
         final Boolean async;
 
@@ -1191,11 +1191,11 @@ public class TaskChain <T> {
             this(chain, async, task, a -> false, null);
         }
 
-        private TaskHolder(TaskChain<?> chain, Boolean async, Task<R, A> task, Function<R, Boolean> repeatIf, AsyncExecutingTask<R, R> delayTask) {
+        private TaskHolder(TaskChain<?> chain, Boolean async, Task<R, A> task, Function<R, Boolean> untilIf, AsyncExecutingTask<R, R> delayTask) {
             this.actionIndex = TaskChain.this.actionIndex++;
             this.chain = chain;
             this.task = task;
-            this.repeatIf = repeatIf;
+            this.untilIf = untilIf;
             this.async = async;
             this.delayTask = delayTask;
         }
@@ -1261,7 +1261,7 @@ public class TaskChain <T> {
          * Accepts result of previous task and executes the next
          */
         private void next(R resp) {
-            if (repeatIf.apply(resp)) {
+            if (!untilIf.apply(resp) && !this.chain.factory.shutdown) {
                 this.chain.previous = resp;
                 if (delayTask != null) delayTask.runAsync(resp, r -> this.run());
                 else this.run();
