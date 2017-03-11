@@ -845,25 +845,91 @@ public class TaskChain <T> {
         return add0(new TaskHolder<>(this, null, task));
     }
 
+    /**
+     * Execute task on main thread that repeats in intervals until a criterion is met
+     * @param task The task to execute
+     * @param untilIf A criteria that stops this task from repeating when it evaluates as true and continues with the next task
+     * @param interval The interval between task repetitions
+     * @param units The {@link TimeUnit} that the interval is measured in
+     * @param <R> Return type that the next parameter can expect as argument type
+     */
     @SuppressWarnings("WeakerAccess")
-    public <R> TaskChain<R> syncUntil(Task<R, R> task, Function<R, Boolean> untilIf, int delay, TimeUnit units) {
-        return until(task, untilIf, delay, units, false);
+    public <R> TaskChain<R> syncUntil(Task<R, R> task, Function<R, Boolean> untilIf, int interval, TimeUnit units) {
+        return until(task, untilIf, interval, units, false);
+    }
+
+    /**
+     * Execute task on main thread that repeats in intervals until a criterion is met
+     * @param task The task to execute
+     * @param untilIf A criteria that stops this task from repeating when it evaluates as true and continues with the next task
+     * @param gameUnits The interval between task repetitions in game units
+     * @param <R> Return type that the next parameter can expect as argument type
+     */
+    @SuppressWarnings("WeakerAccess")
+    public <R> TaskChain<R> syncUntil(Task<R, R> task, Function<R, Boolean> untilIf, int gameUnits) {
+        return until(task, untilIf, gameUnits, false);
+    }
+
+    /**
+     * {@link TaskChain#syncUntil(Task, Function, int, TimeUnit)} but ran off main thread
+     * @param task The task to execute
+     * @param untilIf A criteria that stops this task from repeating when it evaluates as true and continues with the next task
+     * @param interval The interval between task repetitions
+     * @param units The {@link TimeUnit} that the interval is measured in
+     * @param <R> Return type that the next parameter can expect as argument type
+     */
+    @SuppressWarnings("WeakerAccess")
+    public <R> TaskChain<R> asyncUntil(Task<R, R> task, Function<R, Boolean> untilIf, int interval, TimeUnit units) {
+        return until(task, untilIf, interval, units, true);
+    }
+
+    /**
+     * {@link TaskChain#syncUntil(Task, Function, int, TimeUnit)} but ran off main thread
+     * @param task The task to execute
+     * @param untilIf A criteria that stops this task from repeating when it evaluates as true and continues with the next task
+     * @param gameUnits The interval between task repetitions in game units
+     * @param <R> Return type that the next parameter can expect as argument type
+     */
+    @SuppressWarnings("WeakerAccess")
+    public <R> TaskChain<R> asyncUntil(Task<R, R> task, Function<R, Boolean> untilIf, int gameUnits) {
+        return until(task, untilIf, gameUnits, true);
+    }
+
+    /**
+     * {@link TaskChain#syncUntil(Task, Function, int, TimeUnit)} but ran on current thread the Chain was created on
+     * @param task The task to execute
+     * @param untilIf A criteria that stops this task from repeating when it evaluates as true and continues with the next task
+     * @param interval The interval between task repetitions
+     * @param units The {@link TimeUnit} that the interval is measured in
+     * @param <R> Return type that the next parameter can expect as argument type
+     */
+    @SuppressWarnings("WeakerAccess")
+    public <R> TaskChain<R> currentUntil(Task<R, R> task, Function<R, Boolean> untilIf, int interval, TimeUnit units) {
+        return until(task, untilIf, interval, units, null);
+    }
+
+    /**
+     * {@link TaskChain#syncUntil(Task, Function, int, TimeUnit)} but ran on current thread the Chain was created on
+     * @param task The task to execute
+     * @param untilIf A criteria that stops this task from repeating when it evaluates as true and continues with the next task
+     * @param gameUnits The interval between task repetitions in game units
+     * @param <R> Return type that the next parameter can expect as argument type
+     */
+    @SuppressWarnings("WeakerAccess")
+    public <R> TaskChain<R> currentUntil(Task<R, R> task, Function<R, Boolean> untilIf, int gameUnits) {
+        return until(task, untilIf, gameUnits, null);
     }
 
     @SuppressWarnings("WeakerAccess")
-    public <R> TaskChain<R> asyncUntil(Task<R, R> task, Function<R, Boolean> untilIf, int delay, TimeUnit units) {
-        return until(task, untilIf, delay, units, true);
-    }
-
-    @SuppressWarnings("WeakerAccess")
-    public <R> TaskChain<R> currentUntil(Task<R, R> task, Function<R, Boolean> untilIf, int delay, TimeUnit units) {
-        return until(task, untilIf, delay, units, null);
-    }
-
-    @SuppressWarnings("WeakerAccess")
-    private <R> TaskChain<R> until(Task<R, R> task, Function<R, Boolean> untilIf, int delay, TimeUnit units, Boolean async) {
+    private <R> TaskChain<R> until(Task<R, R> task, Function<R, Boolean> untilIf, int interval, TimeUnit units, Boolean async) {
         //noinspection unchecked
-        return add0(new TaskHolder<>(this, async, task, untilIf, delay <= 0 ? null : (input, next) -> impl.scheduleTask(delay, units, () -> next.accept(input))));
+        return add0(new TaskHolder<>(this, async, task, untilIf, interval <= 0 ? null : (input, next) -> impl.scheduleTask(interval, units, () -> next.accept(input))));
+    }
+
+    @SuppressWarnings("WeakerAccess")
+    private <R> TaskChain<R> until(Task<R, R> task, Function<R, Boolean> untilIf, int gameUnits, Boolean async) {
+        //noinspection unchecked
+        return add0(new TaskHolder<>(this, async, task, untilIf, gameUnits <= 0 ? null : (input, next) -> impl.scheduleTask(gameUnits, () -> next.accept(input))));
     }
 
     /**
